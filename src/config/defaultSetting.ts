@@ -81,7 +81,7 @@ const defaultSetting: LX.AppSetting = {
   },
 
   'player.startupAutoPlay': false,
-  'player.startupPushPlayDetailScreen': false,
+  'player.startupPushPlayDetailScreen': true,
   'player.togglePlayMethod': 'listLoop',
   'player.playQuality': '320k',
   'player.isSavePlayTime': true,
@@ -105,7 +105,7 @@ const defaultSetting: LX.AppSetting = {
   'player.enableFailureStrategy': false,
   'player.failureStrategy': ['lowerQuality', 'togglePlatform', 'playNext', 'toggleSource'],
 
-  'playDetail.isCoverSpin': true,
+  'playDetail.isCoverSpin': false,
   'playDetail.style.align': 'center',
   'playDetail.style.miniLyricAlign': 'center',
   'playDetail.style.coverSize': 100,
@@ -177,9 +177,9 @@ const defaultSetting: LX.AppSetting = {
   'sync.webdav.path': '/LX_Music/',
   'sync.webdav.lastSyncTimeLists': 0,
 
-  'theme.id': 'green',
-  'theme.lightId': 'green',
-  'theme.darkId': 'black',
+  'theme.id': 'qishui',
+  'theme.lightId': 'qishui',
+  'theme.darkId': 'qishui',
   'theme.hideBgDark': false,
   'theme.dynamicBg': true,
   'theme.blur': 18,
@@ -194,7 +194,7 @@ const defaultSetting: LX.AppSetting = {
 }
 
 if (new Date().getMonth() < 2) {
-  defaultSetting['theme.id'] = 'happy_new_year'
+  // 汽水风定制：不切换节日主题，保持默认荧光绿主题
   defaultSetting['desktopLyric.style.lyricPlayedColor'] = 'rgba(255, 18, 34, 1)'
 }
 

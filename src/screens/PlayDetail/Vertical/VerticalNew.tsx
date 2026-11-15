@@ -1,5 +1,6 @@
 import {memo, useState, useRef, useMemo, useEffect, useCallback} from 'react'
-import { View, AppState } from 'react-native'
+import { View, AppState, PanResponder } from 'react-native'
+import { playNext, playPrev } from '@/core/player/player'
 import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
 import MiniLyric from '../components/MiniLyric'
 import Pic from './Pic'
@@ -44,6 +45,19 @@ const VerticalNew = memo(({ componentId }: { componentId: string }) => {
   const [, setForceUpdate] = useState(0)
 
   const [isProgressDragging, setIsProgressDragging] = useState(false);
+
+  // 汽水风：封面页上下滑切歌（上滑下一首 / 下滑上一首）。
+  // 仅当垂直位移明显大于水平位移时接管手势，避免抢走 PagerView 的横向翻页；
+  // 歌词页不挂此手势（歌词自身有双指手势与滚动）。
+  const swipePanResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponder: (_, gs) =>
+      Math.abs(gs.dy) > 24 && Math.abs(gs.dy) > Math.abs(gs.dx) * 1.6,
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dy < -55) void playNext()
+      else if (gs.dy > 55) void playPrev()
+    },
+  }), [])
 
   const onPageSelected = ({ nativeEvent }: PagerViewOnPageSelectedEvent) => {
     setPageIndex(nativeEvent.position)
@@ -135,7 +149,7 @@ const VerticalNew = memo(({ componentId }: { componentId: string }) => {
             if (h > 0 && h !== pagerHeight) setPagerHeight(h)
           }}
         >
-          <View collapsable={false} style={styles.pageContainer}>
+          <View collapsable={false} style={styles.pageContainer} {...swipePanResponder.panHandlers}>
             <View collapsable={false} style={[styles.picPageContainerNew, { paddingTop: containerPaddingH }]}>
               <View style={styles.picContainer}>
                 {/* 移植用户实测正常的 v20260826（e58d1ab1）VerticalOld 封面用法：

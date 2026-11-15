@@ -29,7 +29,7 @@ const AnimatedCover = Animated.createAnimatedComponent(FastImage);
  *   旧代码把 FastImage 包在 Animated.View 里做 rotate 动画时，在 iOS 上会白屏/不渲染；
  *   直接对 FastImage 做 rotate 既保留 FastImage 的缓存/加载能力，又避免白屏。
  * - 错误回退：FastImage 加载失败时显示通用 Image 占位图，避免 RN Image 失败后的完全空白。
- * - 圆形：封面自身 borderRadius = size/2（圆形旋转视觉不变），
+ * - 汽水风：大圆角方形（borderRadius = size*0.09），默认不旋转，
  *   全链路不使用 overflow:'hidden' 裁切——iOS 上 clipsToBounds 祖先
  *   会把带 transform 的后代剔除出渲染树。
  * - 不使用 RNN sharedElementTransitions：iOS 上会被原生层劫持成错位大图；封面与导航转场解耦。
@@ -64,10 +64,10 @@ export default memo(({ componentId }: { componentId: string }) => {
   // 当前歌曲 id，用于切歌时重置旋转角度
   const musicId = playerMusicInfo.id;
 
-  // 圆形封面尺寸
+  // 汽水风：大幅方形封面（占屏宽 82%），弱化黑胶唱片感、贴近沉浸式播放页
   const size = useMemo(() => {
     const availableHeight = winHeight - statusBarHeight - HEADER_HEIGHT;
-    return Math.min(winWidth * 0.65, availableHeight * 0.5);
+    return Math.min(winWidth * 0.82, availableHeight * 0.52);
   }, [winWidth, winHeight, statusBarHeight]);
 
   // ---- 旋转动画：采用与横屏/沉浸一致的 createAnimation/start/stop 模式 ----
@@ -208,18 +208,19 @@ export default memo(({ componentId }: { componentId: string }) => {
     }
   };
 
-  const radius = size / 2;
-  // 外层圆形容器：只负责固定尺寸与定位，**不做 overflow 裁切**。
+  // 汽水风：大圆角方形而非正圆（正圆是黑胶唱片的视觉语言）
+  const radius = Math.round(size * 0.09);
+  // 外层容器：只负责固定尺寸与定位，**不做 overflow 裁切**。
   // iOS 上 overflow:'hidden'(clipsToBounds) 的祖先 + 带 transform 的后代
-  // 会被错误剔除出渲染树（封面白屏的根因）。圆形效果完全由封面自身的
-  // borderRadius 实现——圆形旋转后仍是圆形，视觉与裁切完全一致。
+  // 会被错误剔除出渲染树（封面白屏的根因）。圆角效果完全由封面自身的
+  // borderRadius 实现，无需容器裁切。
   const coverContainerStyle = useMemo(() => ({
     width: size,
     height: size,
     backgroundColor: 'transparent' as const,
   }), [size]);
 
-  // 封面图样式：固定尺寸 + 圆形（borderRadius 自带，无需容器裁切）+ 旋转动画
+  // 封面图样式：固定尺寸 + 圆角方形（borderRadius 自带）+ 旋转动画（默认关闭）
   const animatedCoverStyle = useMemo(() => ({
     width: size,
     height: size,

@@ -121,6 +121,17 @@ export const initSetting = async () => {
 
   const updatedSetting = updateSetting(setting, true)
 
+  // 汽水风定制：一次性切换到「汽水」外观（覆盖安装的旧设置也会生效）。
+  // 写入标记后不再强制，尊重用户之后在设置里手动改的主题与行为开关。
+  if (!(setting as LX.AppSetting | null)?.['qishuiThemeApplied']) {
+    updatedSetting.setting['theme.id'] = 'qishui'
+    updatedSetting.setting['theme.lightId'] = 'qishui'
+    updatedSetting.setting['theme.darkId'] = 'qishui'
+    updatedSetting.setting['player.startupPushPlayDetailScreen'] = true
+    updatedSetting.setting['playDetail.isCoverSpin'] = false
+    updatedSetting.setting['qishuiThemeApplied'] = true
+  }
+
   // 导航顺序迁移：以当前 NAV_MENUS / NAV_GROUPS 为权威来源，把后续新增的菜单项
   // （如百度网盘）补进老用户持久化的 navOrder、navFlatOrder 与 navGroupOrder 末尾，
   // 避免侧边栏、自定义排序列表、播放页 PagerView 在任何模式下丢失新增项。
