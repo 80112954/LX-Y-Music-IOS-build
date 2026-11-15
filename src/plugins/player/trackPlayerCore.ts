@@ -1,0 +1,273 @@
+import TrackPlayer from 'react-native-track-player'
+import { defaultUrl } from '@/config'
+import { NativeModules, Platform } from 'react-native'
+import settingState from '@/store/setting/state'
+import { seekToTime } from './seek'
+import { clearNowPlayingInfo, updateNowPlayingInfo } from '@/utils/nativeModules/nowPlaying'
+
+const list: LX.Player.Track[] = []
+
+const defaultUserAgent = 'Mozilla/5.0 (Linux; Android 10; Pixel 3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.79 Mobile Safari/537.36'
+const httpRxp = /^(https?:\/\/.+|\/.+)/
+const wait = async(ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * 归一化控制中心（原生 NowPlaying）封面：
+ * 原生侧用 imageWithContentsOfFile 读取本地封面，要求纯路径；
+ * 网络/纯路径原样返回，file:// 去掉前缀，其余视为无效。
+ */
+export const normalizeNowPlayingArtwork = (pic?: string | null): string | undefined => {
+  if (!pic) return undefined
+  if (pic.startsWith('file://')) return pic.slice('file://'.length) || undefined
+  return httpRxp.test(pic) ? pic : undefined
+}
+
+/**
+ * 归一化 RNTP track 封面：RNTP 要求 uri 带协议，
+ * 纯本地路径补 file://，网络与 file:// 原样返回。
+ */
+const normalizeTrackArtwork = (pic?: string | null): string | undefined => {
+  if (!pic) return undefined
+  if (pic.startsWith('/')) return `file://${pic}`
+  return /^(https?:\/\/|file:\/\/)/.test(pic) ? pic : undefined
+}
+
+export const trackPlayerState = {
+  isPlaying: false,
+  prevDuration: -1,
+}
+
+const NativeTrackPlayerModule = NativeModules.TrackPlayerModule as {
+  getDuration?: () => Promise<number>
+}
+
+export const formatNowPlayingTitleLine = (title?: string, artist?: string) => {
+  const safeTitle = title ?? 'Unknow'
+  return artist ? `${safeTitle} - ${artist}` : safeTitle
+}
+
+const formatIOSNowPlayingMetadata = (metadata: {
+  title?: string
+  artist?: string
+  artwork?: string
+  duration?: number
+  elapsedTime?: number
+  playbackRate?: number
+  lyric?: string
+}) => {
+  return {
+    // 调用方已经分别提供标准 title/artist 字段；不要再次拼接，避免切歌或
+    // 歌词更新时出现“歌名 - 歌手 - 歌手/歌词”的重复内容。
+    title: metadata.title ?? 'Unknow',
+    // 没有歌词时保留歌手名，避免 iOS 27 Beta 将缺少有效副标题的媒体项
+    // 当成空 Now Playing 会话；启用蓝牙歌词时仍以当前歌词覆盖 artist。
+    artist: metadata.lyric ?? metadata.artist ?? '',
+    album: '',
+    artwork: metadata.artwork ?? '',
+    duration: metadata.duration,
+    elapsedTime: metadata.elapsedTime,
+    playbackRate: metadata.playbackRate,
+  }
+}
+
+export const formatMusicInfo = (musicInfo: LX.Player.PlayMusic) => {
+  return 'progress' in musicInfo ? {
+    id: musicInfo.id,
+    pic: musicInfo.metadata.musicInfo.meta.picUrl,
+    name: musicInfo.metadata.musicInfo.name,
+    singer: musicInfo.metadata.musicInfo.singer,
+    album: musicInfo.metadata.musicInfo.meta.albumName,
+  } : {
+    id: musicInfo.id,
+    pic: musicInfo.meta.picUrl,
+    name: musicInfo.name,
+    singer: musicInfo.singer,
+    album: musicInfo.meta.albumName,
+  }
+}
+
+export const buildTracks = (musicInfo: LX.Player.PlayMusic, url?: LX.Player.Track['url'], duration?: LX.Player.Track['duration']): LX.Player.Track[] => {
+  const mInfo = formatMusicInfo(musicInfo)
+  const track = [] as LX.Player.Track[]
+  const isShowNotificationImage = settingState.setting['player.isShowNotificationImage']
+  const album = mInfo.album || undefined
+  const artwork = isShowNotificationImage && mInfo.pic ? normalizeTrackArtwork(mInfo.pic) : undefined
+  if (url) {
+    track.push({
+      id: `${mInfo.id}__//${Math.random()}__//${url}`,
+      url,
+      title: mInfo.name || 'Unknow',
+      artist: mInfo.singer || 'Unknow',
+      album,
+      artwork,
+      userAgent: defaultUserAgent,
+      musicId: mInfo.id,
+      duration,
+    })
+  }
+  if (!url || Platform.OS != 'ios') {
+    track.push({
+      id: `${mInfo.id}__//${Math.random()}__//default`,
+      url: defaultUrl,
+      title: mInfo.name || 'Unknow',
+      artist: mInfo.singer || 'Unknow',
+      album,
+      artwork,
+      musicId: mInfo.id,
+      duration: 0,
+    })
+  }
+  return track
+}
+
+export const isTempTrack = (trackId: string) => /\/\/default$/.test(trackId)
+
+export const getCurrentTrackId = async() => {
+  const currentTrackIndex = await TrackPlayer.getCurrentTrack()
+  return list[currentTrackIndex]?.id
+}
+
+export const getCurrentTrack = async() => {
+  const currentTrackIndex = await TrackPlayer.getCurrentTrack()
+  return list[currentTrackIndex]
+}
+
+export const applyCurrentVolume = async() => {
+  await TrackPlayer.setVolume(settingState.setting['player.volume'])
+}
+
+export const getTrackDuration = async() => {
+  if (Platform.OS == 'ios' && typeof NativeTrackPlayerModule?.getDuration == 'function') {
+    return NativeTrackPlayerModule.getDuration()
+  }
+  return TrackPlayer.getDuration()
+}
+
+export const clearTracks = () => {
+  list.length = 0
+  trackPlayerState.isPlaying = false
+  trackPlayerState.prevDuration = -1
+}
+
+export const updateCurrentTrackMetadata = async(metadata: {
+  title?: string
+  artist?: string
+  album?: string
+  artwork?: string
+  duration?: number
+  elapsedTime?: number
+  playbackRate?: number
+}) => {
+  if (Platform.OS == 'ios') {
+    // iOS 上由自定义 NowPlayingModule 独占写入 MPNowPlayingInfoCenter。
+    // 不再依赖 react-native-track-player：在 iOS 27 beta 等环境下其 getCurrentTrack /
+    // updateMetadataForTrack 可能卡死或异常，会阻断自定义模块执行，导致控制中心
+    // 无音乐信息、且播放/暂停等命令被禁用（LXSyncRemoteCommandAvailability 在
+    // 缓存为空时会禁用全部命令）。解耦后元数据更新独立可靠，且避免两套系统
+    // 争抢同一个 nowPlayingInfo 造成信息被覆盖。
+    const nowPlayingMetadata: Parameters<typeof updateNowPlayingInfo>[0] = {
+      ...metadata,
+      artwork: metadata.artwork ?? '',
+    }
+    if (metadata.playbackRate !== undefined) nowPlayingMetadata.playbackRate = metadata.playbackRate
+    await updateNowPlayingInfo(nowPlayingMetadata).catch(() => {})
+    return
+  }
+  const currentTrackIndex = await TrackPlayer.getCurrentTrack().catch(() => null)
+  if (currentTrackIndex != null && currentTrackIndex > -1) {
+    await TrackPlayer.updateMetadataForTrack(currentTrackIndex, metadata).catch(() => {})
+  }
+  await TrackPlayer.updateNowPlayingMetadata(metadata, trackPlayerState.isPlaying).catch(() => {})
+}
+
+export const ensureCurrentTrackMetadata = (metadata: {
+  title?: string
+  artist?: string
+  album?: string
+  artwork?: string
+  duration?: number
+  elapsedTime?: number
+  playbackRate?: number
+}) => {
+  void (async() => {
+    const targetMetadata = Platform.OS == 'ios' ? formatIOSNowPlayingMetadata(metadata) : metadata
+    const delays = Platform.OS == 'ios' ? [0, 160, 420, 900] : [0]
+    for (const delay of delays) {
+      if (delay) await wait(delay)
+      await updateCurrentTrackMetadata(targetMetadata)
+    }
+  })()
+}
+
+export const restoreTrack = async(track: LX.Player.Track, position: number, isPlaying: boolean) => {
+  const restoredTrack = { ...track }
+  await TrackPlayer.add([restoredTrack]).then(() => list.push(restoredTrack))
+  const queue = await TrackPlayer.getQueue() as LX.Player.Track[]
+  const trackIndex = queue.findIndex(t => t.id == restoredTrack.id)
+  if (trackIndex > -1) await TrackPlayer.skip(trackIndex)
+  global.lx.playerTrackId = restoredTrack.id
+  if (position > 0) await seekToTime(position)
+  if (isPlaying) await TrackPlayer.play()
+  else await TrackPlayer.pause()
+  await applyCurrentVolume()
+  ensureCurrentTrackMetadata({
+    title: restoredTrack.title,
+    artist: restoredTrack.artist,
+    album: restoredTrack.album,
+    artwork: normalizeNowPlayingArtwork(typeof restoredTrack.artwork == 'string' ? restoredTrack.artwork : undefined),
+    duration: restoredTrack.duration,
+    elapsedTime: position,
+  })
+}
+
+export const initTrackInfo = async(musicInfo: LX.Player.PlayMusic, mInfo: LX.Player.MusicInfo, delayUpdateMusicInfo: (musicInfo: LX.Player.MusicInfo, lyric?: string, isPlaying?: boolean) => void) => {
+  const tracks = buildTracks(musicInfo)
+  await TrackPlayer.add(tracks).then(() => list.push(...tracks))
+  const queue = await TrackPlayer.getQueue() as LX.Player.Track[]
+  await TrackPlayer.skip(queue.findIndex(t => t.id == tracks[0].id))
+  delayUpdateMusicInfo(mInfo)
+}
+
+export const loadTrackPlayerResource = async(musicInfo: LX.Player.PlayMusic, url: string, time: number, shouldAutoStart: boolean) => {
+  const currentTrackIndex = await TrackPlayer.getCurrentTrack()
+  const tracks = buildTracks(musicInfo, url)
+  const track = tracks[0]
+  await TrackPlayer.add(tracks).then(() => list.push(...tracks))
+  const queue = await TrackPlayer.getQueue() as LX.Player.Track[]
+  await TrackPlayer.skip(queue.findIndex(t => t.id == track.id))
+  global.lx.playerTrackId = track.id
+
+  if (currentTrackIndex == null) {
+    if (!isTempTrack(track.id as string)) {
+      if (time) await seekToTime(time)
+      if (!shouldAutoStart) {
+        await TrackPlayer.pause()
+      } else {
+        await TrackPlayer.play()
+        await applyCurrentVolume()
+      }
+    }
+  } else {
+    await TrackPlayer.pause()
+    if (!isTempTrack(track.id as string)) {
+      await seekToTime(time)
+      await TrackPlayer.play()
+      await applyCurrentVolume()
+    }
+  }
+
+  if (queue.length > tracks.length) {
+    const removeCount = queue.length - tracks.length
+    void TrackPlayer.remove(Array(removeCount).fill(null).map((_, i) => i)).then(() => list.splice(0, list.length - removeCount))
+  }
+  return track
+}
+
+export const destroyTrackPlayerCore = async() => {
+  try {
+    await TrackPlayer.destroy()
+  } finally {
+    if (Platform.OS == 'ios') await clearNowPlayingInfo().catch(() => {})
+    clearTracks()
+  }
+}

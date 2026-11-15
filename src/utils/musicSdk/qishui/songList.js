@@ -1,0 +1,168 @@
+import { formatPlayTime } from '@/utils/common'
+import { httpFetch } from '@/utils/request'
+
+// 汽水音乐（字节跳动旗下）Luna API 域名
+const LUNA_API_HOST = 'https://beta-luna.douyin.com'
+
+// 从歌单链接 / ID 中解析 playlist_id
+// 支持：https://.../playlist/123456、?playlist_id=123456、纯数字 ID
+const extractByPatterns = (input) => {
+  const patterns = [
+    /[?&]playlist_id=(\d+)/,
+    /\/(?:playlist|list)\/(\d+)/,
+    /^\s*(\d+)\s*$/,
+    /\b(\d{6,})\b/,
+  ]
+  for (const pattern of patterns) {
+    const match = input.match(pattern)
+    if (match) return match[1]
+  }
+  return ''
+}
+
+const extractPlaylistId = (input) => {
+  if (!input) return ''
+  const str = String(input).trim()
+  try {
+    const decoded = decodeURIComponent(str)
+    return decoded === str ? extractByPatterns(str) : extractByPatterns(decoded)
+  } catch {
+    return extractByPatterns(str)
+  }
+}
+
+// 短链解析：https://qishui.douyin.com/s/iXUsubPF/ 这类分享短链会 302 到
+// https://music.douyin.com/qishui/share/playlist?playlist_id=xxx（跨 host）。
+// RN 的 fetch 自动跟随重定向，最终返回分享页 HTML，其中内嵌了 playlist_id。
+// 从最终响应 URL / HTML 里提取 playlist_id，兜底从 HTML 文本正则提取。
+const resolveShortLinkPlaylistId = async (url) => {
+  try {
+    const resp = await httpFetch(url, {
+      method: 'get',
+      headers: { 'User-Agent': 'Luna/19.1.0 Android' },
+    }).promise
+    // 1) 优先从重定向后的最终 URL 提取
+    let id = extractPlaylistId(resp.url || '')
+    if (id) return id
+    // 2) 兜底从 HTML 文本提取
+    const text = typeof resp.body === 'string' ? resp.body : ''
+    if (!text) return ''
+    id = text.match(/playlist_id[=:"'\s]+(\d+)/)?.[1]
+      || text.match(/playlist[\/=](\d{6,})/)?.[1]
+      || text.match(/("playlist_id")\s*:\s*"?(\d+)"?/)?.[2]
+      || ''
+    return id
+  } catch {
+    return ''
+  }
+}
+
+// 抖音/汽水图片对象 → 完整 URL（url_cover/cover 等字段是 { url_list: [...] } 结构）
+const pickUrl = (value) => {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return value[0] || ''
+  if (Array.isArray(value.url_list) && value.url_list.length > 0) return value.url_list[0]
+  if (Array.isArray(value.urls) && value.urls.length > 0) return `${value.urls[0] || ''}${value.uri || ''}`
+  return value.url || value.uri || ''
+}
+
+export default {
+  regExps: {
+    listDetailLink: /^.+\/(?:playlist|list)\/(\d+)(?:\?.*|&.*$|#.*$|$)/,
+  },
+  sortList: [],
+  limit_list: 30,
+  limit_song: 200,
+
+  // 打开歌单详情：调用汽水 Luna API（POST /luna/playlist/detail），无需登录、无需签名
+  async getListDetail(id, page, retryNum = 0) {
+    let playlistId = id
+    if (/[?&:/]/.test(id)) {
+      playlistId = extractPlaylistId(id)
+    }
+    // 短链（/s/xxx/）无法直接解析出 ID，先跟随重定向拿到 playlist_id
+    if (!playlistId && /^https?:\/\//.test(id)) {
+      playlistId = await resolveShortLinkPlaylistId(id)
+    }
+    if (!playlistId) return Promise.reject(new Error('汽水歌单链接或 ID 解析失败'))
+
+    try {
+      const response = await fetch(`${LUNA_API_HOST}/luna/playlist/detail`, {
+        method: 'POST',
+        headers: {
+          'User-Agent': 'Luna/19.1.0 Android',
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify({ playlist_id: playlistId, count: this.limit_song }),
+      })
+      const data = await response.json()
+
+      const playlist = data?.playlist || {}
+      const mediaResources = Array.isArray(data?.media_resources) ? data.media_resources : []
+
+      return {
+        list: this.filterListDetail(mediaResources),
+        page,
+        limit: mediaResources.length,
+        total: mediaResources.length,
+        source: 'qs',
+        info: {
+          name: playlist.title || playlist.name || '',
+          img: pickUrl(playlist.url_cover || playlist.cover || playlist.cover_url),
+          desc: playlist.description || playlist.intro || '',
+          author: '',
+          play_count: '',
+        },
+      }
+    } catch (err) {
+      if (retryNum > 2) return Promise.reject(err)
+      return this.getListDetail(id, page, ++retryNum)
+    }
+  },
+
+  // 转换汽水歌曲为 musicInfo 格式
+  filterListDetail(mediaResources) {
+    return mediaResources
+      .map((item) => {
+        const track =
+          item?.entity?.track_wrapper?.track ||
+          item?.entity?.track ||
+          item?.track
+        if (!track || !track.id) return null
+        const album = track.album || {}
+        const artists = Array.isArray(track.artists) ? track.artists : []
+        const singer = artists
+          .map((a) => a.name || a.simple_display_name || a.user_info?.nickname || '')
+          .filter(Boolean)
+          .join('、')
+        const cover = pickUrl(album.url_cover || album.cover_url || album.coverURL)
+        const duration = track.duration ?? track.duration_ms ?? 0
+
+        return {
+          singer,
+          name: track.name || track.trackName || '',
+          albumName: album.name || '',
+          albumId: album.id ? String(album.id) : '',
+          songmid: String(track.id),
+          source: 'qs',
+          interval: formatPlayTime(duration > 1000 ? Math.round(duration / 1000) : duration),
+          img: cover,
+          lrc: null,
+          otherSource: null,
+          types: [],
+          _types: {},
+          typeUrl: {},
+        }
+      })
+      .filter(Boolean)
+  },
+
+  // 汽水歌单不支持分类/标签列表，仅支持按链接/ID 打开
+  getList() {
+    return Promise.reject(new Error('汽水音乐仅支持打开歌单链接或 ID'))
+  },
+  getTags() {
+    return Promise.reject(new Error('汽水音乐仅支持打开歌单链接或 ID'))
+  },
+}

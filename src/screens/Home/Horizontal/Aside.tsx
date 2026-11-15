@@ -1,0 +1,284 @@
+import { memo, useMemo, useState, useEffect } from 'react'
+import { ScrollView, TouchableOpacity, View, Dimensions, Platform } from 'react-native'
+import { useNavActiveId, useStatusbarHeight, useBgPic } from '@/store/common/hook'
+import { useTheme } from '@/store/theme/hook'
+import { Icon } from '@/components/common/Icon'
+import { SvgIcon } from '@/components/common/SvgIcon'
+import { confirmDialog, createStyle, exitApp as backHome } from '@/utils/tools'
+import { NAV_MENUS } from '@/config/constant'
+import type { InitState } from '@/store/common/state'
+// import commonState from '@/store/common/state'
+import { exitApp, setNavActiveId } from '@/core/common'
+import { BorderWidths } from '@/theme'
+import { useSettingValue } from '@/store/setting/hook'
+import ImageBackground from '@/components/common/ImageBackground'
+import { defaultHeaders } from '@/components/common/Image'
+import { getCutoutLeftPx } from '@/utils/nativeModules/utils'
+import commonState from '@/store/common/state'
+import { navigations } from '@/navigation'
+
+const NAV_WIDTH = 68
+
+const useCutoutLeft = () => {
+  const [cutoutLeftDp, setCutoutLeftDp] = useState(() => {
+    // iOS 不存在 Android 式的左侧刘海缺口，安全区由 RNN/system 处理；
+    // 旧逻辑用 screen.width - window.width 在 iPad 横屏/Stage Manager 下会算出巨大边距，挤压右侧内容。
+    if (Platform.OS === 'ios') return 0
+    const screen = Dimensions.get('screen')
+    const win = Dimensions.get('window')
+    return Math.max(0, screen.width - win.width)
+  })
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') return
+    const update = () => {
+      void getCutoutLeftPx().then((px: number) => {
+        const { PixelRatio } = require('react-native')
+        setCutoutLeftDp(px > 0 ? Math.round(px / PixelRatio.get()) : 0)
+      })
+    }
+    update()
+    const sub = Dimensions.addEventListener('change', update)
+    return () => sub?.remove()
+  }, [])
+
+  return cutoutLeftDp
+}
+
+const styles = createStyle({
+  container: {
+    flexGrow: 0,
+    // flex: 1,
+    // alignItems: 'center',
+    // justifyContent: 'center',
+    // padding: 10,
+    borderRightWidth: BorderWidths.normal,
+    paddingBottom: 10,
+    width: NAV_WIDTH,
+  },
+  header: {
+    paddingTop: 15,
+    paddingBottom: 15,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerText: {
+    textAlign: 'center',
+    marginLeft: 16,
+  },
+  menus: {
+    flex: 1,
+  },
+  list: {
+    // paddingTop: 10,
+    paddingBottom: 15,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    paddingTop: 15,
+    paddingBottom: 15,
+    // paddingLeft: 25,
+    // paddingRight: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    // backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  iconContent: {
+    // width: 24,
+    // backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    alignItems: 'center',
+  },
+  text: {
+    paddingLeft: 15,
+    // fontWeight: '500',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginVertical: 4,
+    marginHorizontal: 12,
+  },
+  footer: {
+    paddingVertical: 6,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  footerBtn: {
+    padding: 8,
+  },
+})
+
+const Header = () => {
+  const theme = useTheme()
+  const statusBarHeight = useStatusbarHeight()
+
+  const handleLogoPress = () => {
+    setNavActiveId('nav_love')
+  }
+
+  return (
+    <View style={{ paddingTop: statusBarHeight }}>
+      <TouchableOpacity style={styles.header} onPress={handleLogoPress}>
+        <Icon name="logo" color={theme['c-primary-dark-100-alpha-300']} size={22} />
+      </TouchableOpacity>
+    </View>
+  )
+}
+
+type IdType = InitState['navActiveId'] | 'nav_exit' | 'back_home'
+
+const renderIcon = (icon: string, size: number, color: string) => {
+  if (icon.startsWith('svg:')) {
+    return <SvgIcon name={icon.slice(4)} size={size} color={color} />
+  }
+  return <Icon name={icon} size={size} color={color} />
+}
+
+const MenuItem = ({
+  id,
+  icon,
+  onPress,
+}: {
+  id: IdType
+  icon: string
+  onPress: (id: IdType) => void
+}) => {
+  // const t = useI18n()
+  const activeId = useNavActiveId()
+  const theme = useTheme()
+
+  return activeId == id ? (
+    <View style={{ ...styles.menuItem, backgroundColor: theme['c-primary-background-hover'] }}>
+      <View style={styles.iconContent}>
+        {renderIcon(icon, 20, theme['c-primary-font-active'])}
+      </View>
+      {/* <Text style={styles.text} size={14} color={theme['c-primary-font']}>{t(id)}</Text> */}
+    </View>
+  ) : (
+    <TouchableOpacity
+      style={styles.menuItem}
+      onPress={() => {
+        onPress(id)
+      }}
+    >
+      <View style={styles.iconContent}>
+        {renderIcon(icon, 20, theme['c-font-label'])}
+      </View>
+      {/* <Text style={styles.text} size={14}>{t(id)}</Text> */}
+    </TouchableOpacity>
+  )
+}
+
+export default memo(() => {
+  const theme = useTheme()
+  // console.log('render drawer nav')
+  const showBackBtn = useSettingValue('common.showBackBtn')
+  const showExitBtn = useSettingValue('common.showExitBtn')
+  const navStatus = useSettingValue('common.navStatus');
+  const navOrder = useSettingValue('common.navOrder');
+  const navFlatOrder = useSettingValue('common.navFlatOrder');
+  const navGroupEnabled = useSettingValue('common.navGroupEnabled');
+  const isDynamicBg = useSettingValue('theme.dynamicBg');
+  const isSidebarDynamicBg = useSettingValue('theme.sidebarDynamicBg');
+  const dynamicPic = useBgPic();
+  const customBgPicPath = useSettingValue('theme.customBgPicPath');
+  const pic = customBgPicPath || dynamicPic;
+  const blur = useSettingValue('theme.blur');
+  const picOpacity = useSettingValue('theme.picOpacity');
+
+  const showSidebarBg = isDynamicBg && isSidebarDynamicBg && pic;
+
+  const handlePress = (id: IdType) => {
+    switch (id) {
+      case 'nav_exit':
+        void confirmDialog({
+          message: global.i18n.t('exit_app_tip'),
+          confirmButtonText: global.i18n.t('list_remove_tip_button'),
+        }).then((isExit) => {
+          if (!isExit) return
+          exitApp('Exit Btn')
+        })
+        return
+      case 'back_home':
+        backHome()
+        return
+    }
+
+    global.app_event.changeMenuVisible(false)
+    setNavActiveId(id as any)
+  }
+
+  const filteredNavMenus = useMemo(() => {
+    const order = navGroupEnabled
+      ? navOrder
+      : (navFlatOrder?.length ? navFlatOrder : navOrder);
+    if (!order?.length) return NAV_MENUS.filter(
+      menu => menu.id !== 'nav_play_history' && (menu.id === 'nav_setting' || (navStatus[menu.id] ?? true))
+    );
+
+    return order
+      .filter((id: string) => id !== 'nav_play_history')
+      .map((id: string) => NAV_MENUS.find(menu => menu.id === id))
+      .filter((menu: typeof NAV_MENUS[number] | undefined): menu is typeof NAV_MENUS[number] => menu !== undefined && (menu.id === 'nav_setting' || (navStatus[menu.id] ?? true)));
+  }, [navStatus, navOrder, navFlatOrder, navGroupEnabled]);
+
+  const isLandscapeStretch = useSettingValue('theme.isLandscapeStretch')
+  const rawCutoutLeft = useCutoutLeft()
+  const cutoutLeft = isLandscapeStretch ? 0 : rawCutoutLeft
+
+  const handleHistoryPress = () => {
+    setNavActiveId('nav_play_history')
+  }
+  const handleDownloadPress = () => {
+    navigations.pushDownloadManagerScreen(commonState.componentIds[commonState.componentIds.length - 1]?.id!)
+  }
+
+  return (
+    <View style={{ ...styles.container, marginLeft: cutoutLeft, borderRightColor: theme['c-border-background'], backgroundColor: showSidebarBg ? 'transparent' : undefined }}>
+      {showSidebarBg ? (
+        <ImageBackground
+          style={{
+            position: 'absolute',
+            left: -cutoutLeft,
+            top: 0,
+            bottom: 0,
+            right: 0,
+          }}
+          source={{ uri: pic, headers: defaultHeaders }}
+          resizeMode="cover"
+          blurRadius={blur}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: theme['c-content-background'],
+              opacity: picOpacity / 100,
+            }}
+          />
+        </ImageBackground>
+      ) : null}
+      <Header />
+      <ScrollView style={styles.menus}>
+        <View style={styles.list}>
+          {filteredNavMenus.map((menu: typeof NAV_MENUS[number]) => (
+            <MenuItem key={menu.id} id={menu.id} icon={menu.icon} onPress={handlePress} />
+          ))}
+          <View style={styles.divider} />
+        </View>
+      </ScrollView>
+      {global.lx.isCarMode && showBackBtn ? <MenuItem id="back_home" icon="home" onPress={handlePress} /> : null}
+      {global.lx.isCarMode && showExitBtn ? <MenuItem id="nav_exit" icon="exit2" onPress={handlePress} /> : null}
+
+      <View style={styles.footer}>
+        <TouchableOpacity style={styles.footerBtn} onPress={handleHistoryPress}>
+          <Icon name="music_time" size={22} color={theme['c-font-label']} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.footerBtn} onPress={handleDownloadPress}>
+          <Icon name="download-2" size={20} color={theme['c-font-label']} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  )
+})
