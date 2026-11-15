@@ -5,6 +5,7 @@ import PagerView, { type PagerViewOnPageSelectedEvent } from 'react-native-pager
 import MiniLyric from '../components/MiniLyric'
 import Pic from './Pic'
 import Lyric from './Lyric'
+import FeatureBtns from './FeatureBtns'
 import SongInfo from './components/SongInfo'
 import Header, { HEADER_HEIGHT } from './components/Header'
 import Player from './Player'
@@ -164,6 +165,10 @@ const VerticalNew = memo(({ componentId }: { componentId: string }) => {
                   style={[styles.miniLyricContainerNew, miniLyricAlignStyles[miniLyricAlign as keyof typeof miniLyricAlignStyles]]}
                 />
               </View>
+              {/* 汽水式布局：功能按钮竖排浮在封面右下（原为控制条顶部横排） */}
+              <View style={styles.sideBtns} pointerEvents="box-none">
+                <FeatureBtns componentId={componentId} />
+              </View>
             </View>
           </View>
           <View collapsable={false} style={{ flex: 1, width: '100%', height: '100%' }}>
@@ -218,6 +223,12 @@ const styles = createStyle({
   infoContainer: {
     flex: 0,
     flexShrink: 0,
+  },
+  sideBtns: {
+    position: 'absolute',
+    right: 10,
+    bottom: '20%',
+    zIndex: 10,
   },
   miniLyricContainerNew: {
     paddingHorizontal: 10,

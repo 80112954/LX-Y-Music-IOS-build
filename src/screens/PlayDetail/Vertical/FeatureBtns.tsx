@@ -1,7 +1,6 @@
 import { memo, useRef, useCallback, useState, useEffect } from 'react'
 import { View, TouchableOpacity, Alert } from 'react-native'
 import { Icon } from '@/components/common/Icon'
-import { useTheme } from '@/store/theme/hook'
 import { createStyle, toast } from '@/utils/tools'
 import { scaleSizeW } from '@/utils/pixelRatio'
 import { navigations } from '@/navigation'
@@ -26,8 +25,6 @@ import { useWindowSize } from '@/utils/hooks'
 const BTN_SIZE = scaleSizeW(42)
 
 export default memo(({ componentId }: { componentId: string }) => {
-  const theme = useTheme()
-  const iconOpacity = 0.7
   const { height: winHeight } = useWindowSize()
   const isSmallWindow = winHeight < 700
   const menuRef = useRef<PlayDetailMenuType>(null)
@@ -179,18 +176,20 @@ export default memo(({ componentId }: { componentId: string }) => {
   }, [])
 
   return (
-    <View style={[styles.container, isSmallWindow && { paddingVertical: 6 }]}>
+    // 汽水式布局：功能按钮改为封面右侧竖排（原为控制条顶部横排），
+    // 由 VerticalNew 中的绝对定位容器承载；按钮带半透明圆形底 + 荧光绿描边。
+    <View style={[styles.container, isSmallWindow && { paddingVertical: 4 }]}>
       <TouchableOpacity style={styles.btnItem} onPress={handleAddPress} activeOpacity={0.6}>
-        <View style={{ opacity: iconOpacity }}><Icon name="add-music" color={theme['c-font']} rawSize={BTN_SIZE * 0.6} /></View>
+        <View style={styles.btnBg}><Icon name="add-music" color="#fff" rawSize={BTN_SIZE * 0.52} /></View>
       </TouchableOpacity>
       <TouchableOpacity style={styles.btnItem} onPress={handleDownloadPress} activeOpacity={0.6}>
-        <View style={{ opacity: iconOpacity }}><Icon name="download-2" color={theme['c-font']} rawSize={BTN_SIZE * 0.55} /></View>
+        <View style={styles.btnBg}><Icon name="download-2" color="#fff" rawSize={BTN_SIZE * 0.5} /></View>
       </TouchableOpacity>
       <TouchableOpacity style={styles.btnItem} onPress={handleCommentPress} activeOpacity={0.6}>
-        <View style={{ opacity: iconOpacity }}><Icon name="comment" color={theme['c-font']} rawSize={BTN_SIZE * 0.6} /></View>
+        <View style={styles.btnBg}><Icon name="comment" color="#fff" rawSize={BTN_SIZE * 0.52} /></View>
       </TouchableOpacity>
       <TouchableOpacity ref={moreBtnRef} style={styles.btnItem} onPress={handleShowMenu} activeOpacity={0.6}>
-        <View style={{ opacity: iconOpacity }}><Icon name="dots-vertical" color={theme['c-font']} rawSize={BTN_SIZE * 0.6} /></View>
+        <View style={styles.btnBg}><Icon name="dots-vertical" color="#fff" rawSize={BTN_SIZE * 0.52} /></View>
       </TouchableOpacity>
       <PlayDetailMenu
         ref={menuRef}
@@ -213,15 +212,26 @@ export default memo(({ componentId }: { componentId: string }) => {
 
 const styles = createStyle({
   container: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 8,
-    paddingVertical: 16,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 8,
   },
   btnItem: {
     width: BTN_SIZE,
     height: BTN_SIZE,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 5,
+  },
+  btnBg: {
+    width: BTN_SIZE,
+    height: BTN_SIZE,
+    borderRadius: BTN_SIZE / 2,
+    backgroundColor: 'rgba(0, 0, 0, 0.32)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 240, 150, 0.45)',
     justifyContent: 'center',
     alignItems: 'center',
   },

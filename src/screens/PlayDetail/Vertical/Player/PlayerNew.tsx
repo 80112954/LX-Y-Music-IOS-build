@@ -3,7 +3,6 @@ import { View } from 'react-native'
 
 import PlayInfo from './components/PlayInfo'
 import ControlBtn from './components/ControlBtn'
-import FeatureBtns from '../FeatureBtns'
 import { createStyle } from '@/utils/tools'
 import { NAV_SHEAR_NATIVE_IDS } from '@/config/constant'
 import { useWindowSize } from '@/utils/hooks'
@@ -22,7 +21,6 @@ const PlayerNew = memo(({ componentId }: { componentId: string }) => {
       style={[styles.container, containerStyle]}
       nativeID={NAV_SHEAR_NATIVE_IDS.playDetail_player}
     >
-      <FeatureBtns componentId={componentId} />
       <PlayInfo />
       <ControlBtn />
     </View>

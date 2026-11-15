@@ -28,16 +28,24 @@ const defaultSetting: LX.AppSetting = {
   'common.bilibili_multi_page': false,
   'common.quality_show_highest': false,
 
+  // 汽水式布局：只保留用得上的功能页，其余默认隐藏（可在 设置 → 侧边栏导航 恢复）。
   'common.navStatus': {
+    nav_search: true,
     nav_songlist: true,
     nav_top: true,
     nav_love: true,
-    nav_daily_rec: true,
-    nav_my_playlist: true,
-    nav_followed_artists: true,
-    nav_subscribed_albums: true,
-    nav_webdav: true,
-    nav_tx_daily_rec: true,
+    nav_local_download: true,
+    nav_play_history: true,
+    nav_setting: true,
+    nav_daily_rec: false,
+    nav_my_playlist: false,
+    nav_followed_artists: false,
+    nav_subscribed_albums: false,
+    nav_webdav: false,
+    nav_tx_daily_rec: false,
+    nav_tx_playlist: false,
+    nav_kg_playlist: false,
+    nav_kg_daily_rec: false,
   },
 
   'common.navOrder': [

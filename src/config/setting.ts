@@ -132,6 +132,31 @@ export const initSetting = async () => {
     updatedSetting.setting['qishuiThemeApplied'] = true
   }
 
+  // 汽水式布局定制：一次性把功能页精简到「用得上的 7 项」。
+  // 覆盖安装时旧设置里 navStatus 仍带着一堆 true，必须显式写一次；
+  // 写入标记后不再强制，用户可在 设置 → 侧边栏导航 里自由恢复/隐藏任意页面。
+  if (!(setting as LX.AppSetting | null)?.['qishuiLayoutApplied']) {
+    updatedSetting.setting['common.navStatus'] = {
+      nav_search: true,
+      nav_songlist: true,
+      nav_top: true,
+      nav_love: true,
+      nav_local_download: true,
+      nav_play_history: true,
+      nav_setting: true,
+      nav_daily_rec: false,
+      nav_my_playlist: false,
+      nav_followed_artists: false,
+      nav_subscribed_albums: false,
+      nav_webdav: false,
+      nav_tx_daily_rec: false,
+      nav_tx_playlist: false,
+      nav_kg_playlist: false,
+      nav_kg_daily_rec: false,
+    }
+    updatedSetting.setting['qishuiLayoutApplied'] = true
+  }
+
   // 导航顺序迁移：以当前 NAV_MENUS / NAV_GROUPS 为权威来源，把后续新增的菜单项
   // （如百度网盘）补进老用户持久化的 navOrder、navFlatOrder 与 navGroupOrder 末尾，
   // 避免侧边栏、自定义排序列表、播放页 PagerView 在任何模式下丢失新增项。
