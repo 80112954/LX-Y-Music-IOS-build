@@ -1,7 +1,7 @@
 const defaultSetting: LX.AppSetting = {
   version: '2.0',
   'version.autoCheckUpdate': true,
-  'common.isAutoTheme': false,
+  'common.isAutoTheme': true,
   'common.isDarkMode': false,
   'common.langId': null,
   'common.apiSource': '',
@@ -186,7 +186,7 @@ const defaultSetting: LX.AppSetting = {
   'sync.webdav.lastSyncTimeLists': 0,
 
   'theme.id': 'qishui',
-  'theme.lightId': 'qishui',
+  'theme.lightId': 'qishui_light',
   'theme.darkId': 'qishui',
   'theme.hideBgDark': false,
   'theme.dynamicBg': true,

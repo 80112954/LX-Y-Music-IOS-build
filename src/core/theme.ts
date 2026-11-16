@@ -12,7 +12,14 @@ export const applyTheme = (theme: LX.Theme) => {
 }
 
 export const setTheme = (id: string) => {
-  updateSetting({ 'theme.id': id })
+  // 用户在主题列表主动选主题 = 明确要用这个固定主题，退出「跟随系统」，
+  // 否则 getTheme() 会按系统深浅使用 lightId/darkId，导致手动选择不生效。
+  // 想恢复跟随系统，可到 设置 → 主题 → 外观模式 里重新选「跟随系统」。
+  updateSetting({
+    'theme.id': id,
+    'common.isAutoTheme': false,
+    'common.isDarkMode': false,
+  })
   void getTheme().then((theme) => {
     if (theme.id == themeState.theme.id) return
     applyTheme(theme)

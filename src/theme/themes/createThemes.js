@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const { createThemeColors } = require('./utils')
+const qishuiThemes = require('./qishuiThemes')
 
 const defaultThemes = [
   {
@@ -309,7 +310,7 @@ const defaultThemes = [
   },
 ]
 
-const themes = defaultThemes.map(({ config: { primary, font, ...extInfo }, ...themeInfo }) => {
+const builtinThemes = defaultThemes.map(({ config: { primary, font, ...extInfo }, ...themeInfo }) => {
   return {
     ...themeInfo,
     isCustom: false,
@@ -319,8 +320,10 @@ const themes = defaultThemes.map(({ config: { primary, font, ...extInfo }, ...th
     },
   }
 })
+// 汽水定制主题已带完整 config（绿色字体色阶为手工配色），原样保留。
+const themes = builtinThemes.concat(qishuiThemes)
 
 fs.writeFileSync(
   path.join(__dirname, 'themes.ts'),
-  `//! 此文件由 createThemes.js 生成\n\nexport default ${JSON.stringify(themes, null, 2)} as const`
+  `//! 此文件由 createThemes.js 生成（含 qishui 定制主题）\n\nexport default ${JSON.stringify(themes, null, 2)} as const`
 )

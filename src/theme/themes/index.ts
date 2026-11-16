@@ -113,36 +113,32 @@ export const buildActiveThemeColors = (theme: LX.Theme): LX.ActiveTheme => {
 export const getTheme = async () => {
   // fs.promises.readdir()
   const shouldUseDarkColors = themeState.shouldUseDarkColors
-  // let themeId = settingState.setting['theme.id'] == 'auto'
-  //   ? shouldUseDarkColors
-  //     ? settingState.setting['theme.darkId']
-  //     : settingState.setting['theme.lightId']
-  //   // : 'china_ink'
-  //   : settingState.setting['theme.id']
+  const setting = settingState.setting
+  const isAutoTheme = setting['common.isAutoTheme']
+  const isDarkMode = setting['common.isDarkMode']
+
+  // 「跟随系统」三态 + 深浅两套汽水皮肤：
+  //   跟随系统(默认)  -> 系统深色用 darkId(汽水·深色)，系统浅色用 lightId(汽水·浅色)
+  //   手动浅/深色     -> 若当前仍是汽水皮肤对，按深浅取 lightId/darkId；
+  //                      否则用用户在主题列表里手动选定的固定主题 theme.id
+  // 手动另选主题由 setTheme() 写入 theme.id 并退出「跟随系统」。
+  const useDark = isAutoTheme ? shouldUseDarkColors : isDarkMode
+  const customId = setting['theme.id']
+  const isQishuiPair = customId === 'qishui' || customId === 'qishui_light'
   let themeId: string
-  if (settingState.setting['common.isAutoTheme'] && shouldUseDarkColors) {
-    // 跟随系统 + 系统当前为深色 → 汽水（本身即深色主题）
-    themeId = 'qishui'
-  } else if (
-    !settingState.setting['common.isAutoTheme'] &&
-    settingState.setting['common.isDarkMode']
-  ) {
-    // 不跟随系统 + 手动开启深色模式 → 汽水
-    themeId = 'qishui'
+  if (isAutoTheme || isQishuiPair) {
+    themeId = useDark ? setting['theme.darkId'] : setting['theme.lightId']
   } else {
-    // 其他情况使用用户选定的浅色主题
-    themeId = settingState.setting['theme.id']
+    themeId = customId
   }
-  // themeId = 'naruto'
-  // themeId = 'pink'
-  // themeId = 'black'
+
   let theme: LocalTheme | LX.Theme | undefined = themes.find((theme) => theme.id == themeId)
   if (!theme) {
     userThemes = await getUserTheme()
     theme = userThemes.find((theme) => theme.id == themeId)
     if (!theme) {
-      themeId =
-        settingState.setting['theme.id'] == 'auto' && shouldUseDarkColors ? 'black' : 'green'
+      // 兜底：深浅各回退到对应的汽水皮肤，避免拿到已下线的旧主题 id
+      themeId = useDark ? 'qishui' : 'qishui_light'
       theme = themes.find((theme) => theme.id == themeId) as LX.Theme
     }
   }

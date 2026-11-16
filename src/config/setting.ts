@@ -125,7 +125,8 @@ export const initSetting = async () => {
   // 写入标记后不再强制，尊重用户之后在设置里手动改的主题与行为开关。
   if (!(setting as LX.AppSetting | null)?.['qishuiThemeApplied']) {
     updatedSetting.setting['theme.id'] = 'qishui'
-    updatedSetting.setting['theme.lightId'] = 'qishui'
+    updatedSetting.setting['theme.lightId'] = 'qishui_light'
+    updatedSetting.setting['common.isAutoTheme'] = true
     updatedSetting.setting['theme.darkId'] = 'qishui'
     updatedSetting.setting['player.startupPushPlayDetailScreen'] = true
     updatedSetting.setting['playDetail.isCoverSpin'] = false
@@ -155,6 +156,18 @@ export const initSetting = async () => {
       nav_kg_daily_rec: false,
     }
     updatedSetting.setting['qishuiLayoutApplied'] = true
+  }
+
+
+  // 汽水·深浅跟随系统定制：覆盖安装的老设置里 lightId 仍是深色 qishui、
+  // isAutoTheme 仍是 false，需一次性纠正。写入标记后不再强制，
+  // 用户之后在 设置 → 主题 → 外观模式 里的选择会被尊重。
+  if (!(setting as LX.AppSetting | null)?.['qishuiFollowSystemApplied']) {
+    updatedSetting.setting['theme.lightId'] = 'qishui_light'
+    updatedSetting.setting['theme.darkId'] = 'qishui'
+    updatedSetting.setting['common.isAutoTheme'] = true
+    updatedSetting.setting['common.isDarkMode'] = false
+    updatedSetting.setting['qishuiFollowSystemApplied'] = true
   }
 
   // 导航顺序迁移：以当前 NAV_MENUS / NAV_GROUPS 为权威来源，把后续新增的菜单项
